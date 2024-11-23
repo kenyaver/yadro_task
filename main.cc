@@ -1,61 +1,55 @@
-#define NS3_LOG_ENABLE 1
+#include "ns3/config-store-module.h"
 #include "ns3/core-module.h"
-#include "ns3/network-module.h"
 #include "ns3/lte-module.h"
 #include "ns3/mobility-module.h"
-#include "ns3/config-store.h"
+#include "ns3/network-module.h"
 
 using namespace ns3;
 
+int
+main(int argc, char* argv[])
+{
+    CommandLine cmd(__FILE__);
+    cmd.Parse(argc, argv);
 
-int main(int argc, char *argv[]) {
+    ConfigStore inputConfig;
+    inputConfig.ConfigureDefaults();
 
-  NodeContainer enbNodes;
-  enbNodes.Create(1);
+    cmd.Parse(argc, argv);
 
-  NodeContainer ueNodes;
-  enbNodes.Create(2);
+    Ptr<LteHelper> lteHelper = CreateObject<LteHelper>();
 
-  // LTE module creation
+    lteHelper->SetAttribute("PathlossModel", StringValue("ns3::FriisSpectrumPropagationLossModel"));
 
-  Ptr<LteHelper> lteHelper = CreateObject<LteHelper>();
+    NodeContainer enbNodes;
+    NodeContainer ueNodes;
+    enbNodes.Create(1);
+    ueNodes.Create(2);
 
-  // Mobility module creation
+    MobilityHelper mobility;
+    mobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
+    mobility.Install(enbNodes);
+    mobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
+    mobility.Install(ueNodes);
 
-  MobilityHelper mobility;
-  mobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
-  mobility.Install(enbNodes);
-  mobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
-  mobility.Install(ueNodes);
+    NetDeviceContainer enbDevs;
+    NetDeviceContainer ueDevs;
+    enbDevs = lteHelper->InstallEnbDevice(enbNodes);
+    ueDevs = lteHelper->InstallUeDevice(ueNodes);
 
-  // Network configuration
+    lteHelper->Attach(ueDevs, enbDevs.Get(0));
 
-  NetDeviceContainer enbDevs = lteHelper->InstallEnbDevice(enbNodes);
-  NetDeviceContainer ueDevs = lteHelper->InstallUeDevice(ueNodes);
+    EpsBearer::Qci q = EpsBearer::GBR_CONV_VOICE;
+    EpsBearer bearer(q);
+    lteHelper->ActivateDataRadioBearer(ueDevs, bearer);
 
-  // attaching UEs to eNB && activating a data radio bareer
-  
-  lteHelper->Attach(ueDevs, enbDevs.Get(0));
-  enum EpsBearer::Qci q = EpsBearer::GBR_CONV_VOICE;
-  EpsBearer bearer(q);
-  lteHelper->ActivateDataRadioBearer(ueDevs, bearer);
+    Simulator::Stop(Seconds(0.5));
 
-  // pfffmacscheduler
+    lteHelper->EnableMacTraces();
+    lteHelper->EnableRlcTraces();
 
-  lteHelper->SetSchedulerType("ns3::PfFfMacScheduler");
+    Simulator::Run();
+    Simulator::Destroy();
 
-
-  // RLC & MAC characteristics output
-
-  lteHelper->EnableRlcTraces();
-  lteHelper->EnableMacTraces();
-
-
-
-  // simulation
-  Simulator::Stop(Seconds(0.005));
-  Simulator::Run();
-  Simulator::Destroy();
-
-  return 0;
+    return 0;
 }
